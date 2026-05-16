@@ -69,6 +69,9 @@ void render_frame(uint32_t *pixels, int stride, bool *dirty,
             bool selected  = cell_selected(sel, x, y, t->cols);
             uint32_t fg = c.fg, bg = c.bg;
             if (is_cursor || selected) { uint32_t tmp = fg; fg = bg; bg = tmp; }
+            /* concealed cell (SGR 8): fg==bg, cursor swap leaves both equal → invisible.
+               Invert bg so the cursor block/underline/beam is always visible. */
+            if (is_cursor && fg == bg) bg = (~fg) & 0x00FFFFFF;
 
             /* wide chars occupy 2 cell-widths; normal chars 1 */
             int draw_w = (c.attrs & ATTR_WIDE) ? cw * 2 : cw;

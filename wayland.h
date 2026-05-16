@@ -45,6 +45,9 @@ struct WaylandState {
     /* cursor blink */
     int      blink_fd;      /* timerfd, -1 if unavailable */
 
+    /* keyboard modifier state (updated by kb_modifiers) */
+    bool     kb_shift;
+
     /* mouse / pointer */
     struct wl_pointer *pointer;
     int      ptr_x, ptr_y;     /* current cell position, 1-based */

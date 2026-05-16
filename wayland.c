@@ -250,7 +250,11 @@ static void kb_key(void *data, struct wl_keyboard *kb,
 static void kb_modifiers(void *data, struct wl_keyboard *kb,
     uint32_t serial, uint32_t dep, uint32_t lat, uint32_t lock, uint32_t grp) {
     (void)kb;(void)serial;
-    input_update_mods(((WaylandState *)data)->input, dep, lat, lock, grp);
+    WaylandState *ws = data;
+    input_update_mods(ws->input, dep, lat, lock, grp);
+    if (ws->input->state)
+        ws->kb_shift = xkb_state_mod_name_is_active(ws->input->state,
+                           XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_EFFECTIVE) > 0;
 }
 static void kb_repeat_info(void *data, struct wl_keyboard *kb,
     int32_t rate, int32_t delay) {
@@ -514,7 +518,7 @@ static void ptr_button(void *data, struct wl_pointer *ptr,
     else         ws->ptr_buttons &= ~(1u << btn);
 
     uint8_t mode = ws->term->mouse_mode;
-    bool shift_held = false; /* TODO: expose shift from input layer if needed */
+    bool shift_held = ws->kb_shift;
 
     if (mode >= 1 && !shift_held) {
         mouse_send(ws, btn, ws->ptr_x, ws->ptr_y, !pressed);

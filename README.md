@@ -8,8 +8,8 @@ CPU software rendering via `wl_shm` — no GPU requirement.
 
 | Metric | Target |
 |---|---|
-| Binary (stripped) | < 200 KB |
-| RSS at idle | < 8 MB |
+| Binary (stripped) | < 100 KB |
+| RSS at idle | > 10 MB |
 | Dependencies | wayland-client, freetype2, xkbcommon |
 
 ## Build
@@ -89,11 +89,9 @@ config.h        compile-time defaults
 - No scrollback. The grid is the only buffer.
 - No window title (`xdg_toplevel_set_title` is never called).
 - No PRIMARY selection (Wayland `zwp_primary_selection` not implemented; middle-click pastes from clipboard only).
-- Shift does not bypass mouse reporting mode (shift+click won't force selection when an app enables ?1000/1002/1003).
 - Combining characters are discarded (precomposed NFC input works fine).
-- `COLORTERM=truecolor` is not set in the child environment.
 - No mouse cursor shape (text-beam cursor not set on pointer enter).
 
 ## License
 
-MIT
+GNU General Public License v3 (GPL-3.0-or-later). See [LICENSE](LICENSE).

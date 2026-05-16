@@ -16,6 +16,7 @@ Pty pty_spawn(int cols, int rows, char *const argv[]) {
     if (p.pid == 0) {
         /* child */
         setenv("TERM", "xterm-256color", 1);
+        setenv("COLORTERM", "truecolor", 1);
         char *shell = getenv("SHELL");
         if (!shell) shell = "/bin/sh";
         char *args[] = { shell, NULL };

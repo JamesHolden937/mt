@@ -1,6 +1,6 @@
 # mt — minimal Wayland terminal
 
-A small, fast terminal emulator for Wayland **tiling** compositors (sway, river, Hyprland tiled, etc.).
+A small, fast terminal emulator for Wayland **tiling** compositors (sway, river, Hyprland, etc.).
 No toolkit dependencies, no scrollback, no window title management.
 CPU software rendering via `wl_shm` — no GPU requirement.
 
@@ -15,7 +15,7 @@ generally ignore this hint and tile the window normally.
 | Metric | Target |
 |---|---|
 | Binary (stripped) | < 100 KB |
-| RSS at idle | > 10 MB |
+| RSS at idle | < 8 MB |
 | Dependencies | wayland-client, freetype2, xkbcommon |
 
 ## Build
@@ -31,20 +31,31 @@ make run
 
 `xdg-shell-protocol.{c,h}` are checked in; `wayland-scanner` is not required for a plain build.
 
+## Install
+
+```sh
+sudo ./install.sh              # installs to /usr/local/bin and /usr/local/share/applications
+PREFIX=~/.local ./install.sh   # user-local install, no sudo needed
+sudo make install              # same as install.sh via make
+sudo make uninstall
+```
+
+The `.desktop` entry installed to `$PREFIX/share/applications/mt.desktop` makes `mt` visible
+to rofi, wofi, dmenu, and any launcher that indexes XDG application directories.
+
 ## Usage
 
 ```
 mt [-f <font.ttf>] [-s <size_px>] [-c <cols>] [-r <rows>] [-- cmd [args...]]
 ```
 
-A font path is required (no fontconfig). Example:
+All flags are optional. The default font path and size are set in `config.h` at compile time.
 
 ```sh
+mt                                                          # use compiled-in defaults
 mt -f /usr/share/fonts/TTF/DejaVuSansMono.ttf -s 14
 mt -f /usr/share/fonts/TTF/JetBrainsMono-Regular.ttf -s 13 -- tmux
 ```
-
-The default font path (`FONT_PATH` in `config.h`) can be changed at compile time.
 
 ## Keyboard
 
@@ -87,6 +98,8 @@ config.h        compile-time defaults
 **Rendering**: two `wl_shm` pixel buffers, double-buffered. Only dirty rows are re-blitted per frame. Zero CPU when idle (gated on `wl_surface_frame` callback).
 
 **Font**: one monospace face, one size, rasterized to an 8-bit alpha atlas on first use. Synthetic bold (`FT_GlyphSlot_Embolden`) and italic (`FT_GlyphSlot_Oblique`).
+
+**Cursor**: blinking block at 500 ms interval via `timerfd`; blink phase resets on any keypress so the cursor is never hidden mid-input. Shape controlled by DECSCUSR.
 
 **VT**: covers the DEC/xterm subset — 256-color and truecolor SGR, cursor movement, erase, scroll region, insert/delete, alternate screen (?1047/?1049), mouse reporting (X10/button/all, SGR), OSC 52 clipboard, bracketed paste, focus events, DECSCUSR cursor shapes, DEC special graphics charset.
 

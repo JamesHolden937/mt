@@ -194,6 +194,18 @@ static void repeat_disarm(WaylandState *ws) {
     timerfd_settime(ws->rpt_fd, 0, &its, NULL);
 }
 
+/* Reset cursor blink phase: make cursor visible and restart the 500 ms period.
+   Called on any user key event so the cursor is never hidden mid-keystroke. */
+static void blink_reset(WaylandState *ws) {
+    ws->term->cursor_blink_on = true;
+    if (ws->blink_fd >= 0) {
+        struct itimerspec its = { {0,500000000L}, {0,500000000L} };
+        timerfd_settime(ws->blink_fd, 0, &its, NULL);
+    }
+    ws->term->dirty[ws->term->screen][ws->term->cy] = true;
+    ws->dirty = true;
+}
+
 /* ── keyboard ────────────────────────────────────────────────────────────── */
 static void kb_keymap(void *data, struct wl_keyboard *kb,
     uint32_t fmt, int fd, uint32_t size) {
@@ -242,10 +254,12 @@ static void kb_key(void *data, struct wl_keyboard *kb,
     int n = input_key(ws->input, key, key_state, ws->term->app_cursor, buf);
     if (n > 0) pty_write(ws->pty, buf, n);
 
-    if (key_state == WL_KEYBOARD_KEY_STATE_PRESSED && n > 0)
+    if (key_state == WL_KEYBOARD_KEY_STATE_PRESSED && n > 0) {
         repeat_arm(ws, key);
-    else if (key_state == WL_KEYBOARD_KEY_STATE_RELEASED && key == ws->rpt_key)
+        blink_reset(ws);
+    } else if (key_state == WL_KEYBOARD_KEY_STATE_RELEASED && key == ws->rpt_key) {
         repeat_disarm(ws);
+    }
 }
 static void kb_modifiers(void *data, struct wl_keyboard *kb,
     uint32_t serial, uint32_t dep, uint32_t lat, uint32_t lock, uint32_t grp) {
@@ -690,8 +704,10 @@ void wayland_run(WaylandState *ws) {
                     if (d[y]) ws->dirty = true;
             }
             ws->term->dirty[ws->term->screen][prev_cy] = true;
-            ws->term->dirty[ws->term->screen][ws->term->cy] = true;
-            ws->dirty = true;
+            /* Reset blink phase whenever the terminal updates so the cursor
+               stays visible during program activity (not just during keystrokes,
+               which may not generate repeats if the compositor sets rpt_rate=0). */
+            blink_reset(ws);
         }
 
         /* key repeat timer fired */
@@ -702,7 +718,10 @@ void wayland_run(WaylandState *ws) {
             int n = input_key(ws->input, ws->rpt_key,
                               WL_KEYBOARD_KEY_STATE_PRESSED,
                               ws->term->app_cursor, buf);
-            if (n > 0) pty_write(ws->pty, buf, n);
+            if (n > 0) {
+                pty_write(ws->pty, buf, n);
+                blink_reset(ws);
+            }
         }
 
         if (fds[1].revents & (POLLHUP | POLLERR))

@@ -54,7 +54,11 @@ static void alloc_buffer(WaylandState *ws, WlBuffer *b, int w, int h) {
 static void frame_done(void *data, struct wl_callback *cb, uint32_t t) {
     (void)t;
     wl_callback_destroy(cb);
-    ((WaylandState *)data)->frame_pending = false;
+    WaylandState *ws = data;
+    ws->frame_pending = false;
+    /* wl_shm: compositor has composited the frame before presenting, so the
+       buffer is safe to reuse even if wl_buffer_release hasn't arrived yet. */
+    ws->buf.busy = false;
 }
 static const struct wl_callback_listener frame_listener = { frame_done };
 

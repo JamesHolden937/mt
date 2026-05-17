@@ -30,9 +30,8 @@ struct WaylandState {
     struct xdg_surface   *xdg_surface;
     struct xdg_toplevel  *xdg_toplevel;
 
-    WlBuffer  buffers[2];
-    int       buf_idx;      /* index of the back buffer */
-    bool     *buf_dirty[2]; /* per-buffer per-row dirty flags */
+    WlBuffer  buf;
+    bool     *buf_dirty;    /* per-row dirty flags (accumulates while buf is busy) */
 
     int       width, height;
 

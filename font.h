@@ -5,8 +5,8 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
-#define ATLAS_SLOTS  4096
-#define ATLAS_HASH   4096  /* must be power of 2, >= ATLAS_SLOTS */
+#define ATLAS_SLOTS  512
+#define ATLAS_HASH   512   /* must be power of 2, >= ATLAS_SLOTS */
 
 typedef struct {
     uint32_t cp;

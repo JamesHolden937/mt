@@ -68,21 +68,12 @@ static void request_frame(WaylandState *ws) {
 
 static void do_render(WaylandState *ws) {
     if (!ws->dirty || ws->frame_pending || !ws->configured) return;
+    if (ws->buf.busy) return;  /* compositor still holds it; retry after release */
 
-    int bi = -1;
-    for (int i = 0; i < 2; i++)
-        if (!ws->buffers[i].busy) { bi = i; break; }
-    if (bi < 0) return;
-
-    /* Drain term-level dirty flags into both buffer slots, then clear them.
-       Each changed row will be re-rendered once per buffer over two frames. */
+    /* Drain term-level dirty flags into buf_dirty (accumulates while busy). */
     bool *td = ws->term->dirty[ws->term->screen];
     for (int y = 0; y < ws->term->rows; y++) {
-        if (td[y]) {
-            ws->buf_dirty[0][y] = true;
-            ws->buf_dirty[1][y] = true;
-            td[y] = false;
-        }
+        if (td[y]) { ws->buf_dirty[y] = true; td[y] = false; }
     }
 
     /* build selection in reading order */
@@ -95,18 +86,11 @@ static void do_render(WaylandState *ws) {
         else
             { sel.x0=x0; sel.y0=y0; sel.x1=x1; sel.y1=y1; }
     }
-    render_frame(ws->buffers[bi].data, ws->width, ws->buf_dirty[bi],
-                 &sel, ws->term, ws->font);
-    ws->buffers[bi].busy = true;
+    render_frame(ws->buf.data, ws->width, ws->buf_dirty, &sel, ws->term, ws->font);
+    ws->buf.busy = true;
+    ws->dirty = false;
 
-    /* Stay dirty if the other buffer still has rows pending so the event
-       loop re-renders it next frame (after the compositor acks this one). */
-    bool pending = false;
-    for (int y = 0; y < ws->term->rows && !pending; y++)
-        pending = ws->buf_dirty[1 - bi][y];
-    ws->dirty = pending;
-
-    wl_surface_attach(ws->surface, ws->buffers[bi].wl_buf, 0, 0);
+    wl_surface_attach(ws->surface, ws->buf.wl_buf, 0, 0);
     wl_surface_damage_buffer(ws->surface, 0, 0, ws->width, ws->height);
     request_frame(ws);
 }
@@ -152,14 +136,11 @@ static void toplevel_configure(void *data, struct xdg_toplevel *tl,
     pty_resize(ws->pty, cols, rows);
     term_mark_all_dirty(ws->term);
 
-    for (int i = 0; i < 2; i++)
-        alloc_buffer(ws, &ws->buffers[i], w, h);
+    alloc_buffer(ws, &ws->buf, w, h);
 
-    for (int i = 0; i < 2; i++) {
-        free(ws->buf_dirty[i]);
-        ws->buf_dirty[i] = malloc(rows);
-        memset(ws->buf_dirty[i], 1, rows); /* buffer contents are stale after resize */
-    }
+    free(ws->buf_dirty);
+    ws->buf_dirty = malloc(rows);
+    memset(ws->buf_dirty, 1, rows); /* buffer contents stale after resize */
 
     ws->dirty = true;
 }
@@ -508,8 +489,7 @@ static void ptr_motion(void *data, struct wl_pointer *ptr,
 
     if (ws->selecting) {
         ws->sel_x1 = cx - 1; ws->sel_y1 = cy - 1;
-        /* mark all rows dirty in both buffers so selection redraws */
-        for (int i = 0; i < 2; i++) memset(ws->buf_dirty[i], 1, ws->term->rows);
+        memset(ws->buf_dirty, 1, ws->term->rows);
         ws->dirty = true;
     }
 }
@@ -542,7 +522,7 @@ static void ptr_button(void *data, struct wl_pointer *ptr,
             ws->sel_y0 = ws->sel_y1 = ws->ptr_y - 1;
             ws->selecting = true;
             ws->has_sel   = false;
-            for (int i = 0; i < 2; i++) memset(ws->buf_dirty[i], 1, ws->term->rows);
+            memset(ws->buf_dirty, 1, ws->term->rows);
             ws->dirty = true;
         } else {
             ws->selecting = false;
@@ -620,13 +600,10 @@ WaylandState *wayland_init(Term *t, Font *f, Input *inp, Pty *pty) {
     ws->width  = f->cell_w * t->cols;
     ws->height = f->cell_h * t->rows;
 
-    for (int i = 0; i < 2; i++)
-        alloc_buffer(ws, &ws->buffers[i], ws->width, ws->height);
+    alloc_buffer(ws, &ws->buf, ws->width, ws->height);
 
-    for (int i = 0; i < 2; i++) {
-        ws->buf_dirty[i] = malloc(t->rows);
-        memset(ws->buf_dirty[i], 1, t->rows); /* all rows need first render */
-    }
+    ws->buf_dirty = malloc(t->rows);
+    memset(ws->buf_dirty, 1, t->rows); /* all rows need first render */
 
     /* clipboard data device */
     if (ws->data_mgr && ws->seat) {
@@ -746,12 +723,10 @@ void wayland_free(WaylandState *ws) {
     if (ws->data_device)  wl_data_device_destroy(ws->data_device);
     if (ws->data_mgr)     wl_data_device_manager_destroy(ws->data_mgr);
     if (ws->pointer)      wl_pointer_destroy(ws->pointer);
-    for (int i = 0; i < 2; i++) free(ws->buf_dirty[i]);
-    for (int i = 0; i < 2; i++) {
-        if (ws->buffers[i].wl_buf) wl_buffer_destroy(ws->buffers[i].wl_buf);
-        if (ws->buffers[i].data)   munmap(ws->buffers[i].data, ws->buffers[i].size);
-        if (ws->buffers[i].fd >= 0) close(ws->buffers[i].fd);
-    }
+    free(ws->buf_dirty);
+    if (ws->buf.wl_buf) wl_buffer_destroy(ws->buf.wl_buf);
+    if (ws->buf.data)   munmap(ws->buf.data, ws->buf.size);
+    if (ws->buf.fd >= 0) close(ws->buf.fd);
     if (ws->keyboard)     wl_keyboard_destroy(ws->keyboard);
     if (ws->seat)         wl_seat_destroy(ws->seat);
     if (ws->xdg_toplevel) xdg_toplevel_destroy(ws->xdg_toplevel);

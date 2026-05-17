@@ -17,7 +17,8 @@ static int ht_find(Font *f, uint32_t cp, uint8_t style) {
     uint32_t h = ht_hash(cp, style);
     for (int i = 0; i < ATLAS_HASH; i++) {
         uint32_t idx = (h + i) & (ATLAS_HASH - 1);
-        if (!f->ht[idx].valid) return -1;
+        if (f->ht[idx].state == 0) return -1;
+        if (f->ht[idx].state == 2) continue; /* tombstone: keep probing */
         if (f->ht[idx].cp == cp && f->ht[idx].style == style)
             return (int)f->ht[idx].slot;
     }
@@ -26,10 +27,22 @@ static int ht_find(Font *f, uint32_t cp, uint8_t style) {
 
 static void ht_insert(Font *f, uint32_t cp, uint8_t style, uint32_t slot) {
     uint32_t h = ht_hash(cp, style);
+    int tomb = -1;
     for (int i = 0; i < ATLAS_HASH; i++) {
         uint32_t idx = (h + i) & (ATLAS_HASH - 1);
-        if (!f->ht[idx].valid) {
-            f->ht[idx] = (GlyphEntry){ cp, style, slot, true };
+        if (f->ht[idx].state == 2) { if (tomb < 0) tomb = (int)idx; continue; }
+        if (f->ht[idx].state != 0) continue;
+        uint32_t ins = (tomb >= 0) ? (uint32_t)tomb : idx;
+        f->ht[ins] = (GlyphEntry){ cp, style, slot, 1 };
+        return;
+    }
+    if (tomb >= 0) f->ht[tomb] = (GlyphEntry){ cp, style, slot, 1 };
+}
+
+static void evict_slot(Font *f, int slot) {
+    for (int i = 0; i < ATLAS_HASH; i++) {
+        if (f->ht[i].state == 1 && (int)f->ht[i].slot == slot) {
+            f->ht[i].state = 2; /* tombstone */
             return;
         }
     }
@@ -71,26 +84,34 @@ void font_free(Font *f) {
 int font_glyph(Font *f, uint32_t cp, uint8_t style) {
     int cached = ht_find(f, cp, style);
     if (cached >= 0) return cached;
-    if (f->atlas_used >= ATLAS_SLOTS) return -1;
 
     FT_Face face = f->face;
     FT_UInt gi = FT_Get_Char_Index(face, cp);
     if (!gi && cp != ' ') return -1;
 
-    FT_Int32 load_flags = FT_LOAD_RENDER; /* FT_LOAD_TARGET_NORMAL: 8-bit grayscale AA */
-    if (FT_Load_Glyph(face, gi, load_flags)) return -1;
+    if (FT_Load_Glyph(face, gi, FT_LOAD_DEFAULT)) return -1;
 
     if ((style & ATTR_BOLD) && !f->bold_face)
         FT_GlyphSlot_Embolden(face->glyph);
     if (style & ATTR_ITALIC)
         FT_GlyphSlot_Oblique(face->glyph);
 
+    if (FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) return -1;
+
     FT_Bitmap *bm = &face->glyph->bitmap;
     int bx = face->glyph->bitmap_left;
     int by = f->baseline - face->glyph->bitmap_top;
 
-    int slot = f->atlas_used++;
+    int slot;
+    if (f->atlas_used < ATLAS_SLOTS) {
+        slot = f->atlas_used++;
+    } else {
+        slot = f->next_slot;
+        f->next_slot = (f->next_slot + 1) % ATLAS_SLOTS;
+        evict_slot(f, slot);
+    }
     uint8_t *dst = f->atlas + (size_t)slot * f->cell_w * f->cell_h;
+    memset(dst, 0, (size_t)f->cell_w * f->cell_h);
 
     for (int row = 0; row < (int)bm->rows; row++) {
         int dy = by + row;

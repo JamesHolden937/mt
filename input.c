@@ -68,7 +68,7 @@ xkb_keysym_t input_keysym_mods(Input *inp, uint32_t key,
 }
 
 int input_key(Input *inp, uint32_t key, uint32_t key_state,
-              bool app_cursor, char buf[32]) {
+              bool app_cursor, bool app_keypad, char buf[32]) {
     if (!inp->state || key_state == 0 /* released */) return 0;
 
     xkb_keycode_t kc = key + 8;
@@ -85,6 +85,32 @@ int input_key(Input *inp, uint32_t key, uint32_t key_state,
        5=ctrl,6=ctrl+shift,7=ctrl+alt,8=ctrl+alt+shift) */
     int  mod     = 1 + (shift?1:0) + (alt?2:0) + (ctrl?4:0);
     bool has_mod = (mod > 1);
+
+    /* application keypad mode */
+    if (app_keypad) {
+        const char *kpseq = NULL;
+        switch (ks) {
+        case XKB_KEY_KP_0:         kpseq = "\x1bOp"; break;
+        case XKB_KEY_KP_1:         kpseq = "\x1bOq"; break;
+        case XKB_KEY_KP_2:         kpseq = "\x1bOr"; break;
+        case XKB_KEY_KP_3:         kpseq = "\x1bOs"; break;
+        case XKB_KEY_KP_4:         kpseq = "\x1bOt"; break;
+        case XKB_KEY_KP_5:         kpseq = "\x1bOu"; break;
+        case XKB_KEY_KP_6:         kpseq = "\x1bOv"; break;
+        case XKB_KEY_KP_7:         kpseq = "\x1bOw"; break;
+        case XKB_KEY_KP_8:         kpseq = "\x1bOx"; break;
+        case XKB_KEY_KP_9:         kpseq = "\x1bOy"; break;
+        case XKB_KEY_KP_Decimal:   kpseq = "\x1bOn"; break;
+        case XKB_KEY_KP_Separator: kpseq = "\x1bOl"; break;
+        case XKB_KEY_KP_Add:       kpseq = "\x1bOk"; break;
+        case XKB_KEY_KP_Subtract:  kpseq = "\x1bOm"; break;
+        case XKB_KEY_KP_Multiply:  kpseq = "\x1bOj"; break;
+        case XKB_KEY_KP_Divide:    kpseq = "\x1bOo"; break;
+        case XKB_KEY_KP_Enter:     kpseq = "\x1bOM"; break;
+        default: break;
+        }
+        if (kpseq) { memcpy(buf, kpseq, 3); return 3; }
+    }
 
     /* special keys → escape sequences */
     const char *seq = NULL;

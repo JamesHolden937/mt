@@ -214,6 +214,7 @@ static void kb_leave(void *data, struct wl_keyboard *kb,
         pty_write(ws->pty, "\033[O", 3);
 }
 static void clipboard_paste(WaylandState *ws);
+static void sel_copy(WaylandState *ws);
 
 static void kb_key(void *data, struct wl_keyboard *kb,
     uint32_t serial, uint32_t time, uint32_t key, uint32_t key_state) {
@@ -225,8 +226,8 @@ static void kb_key(void *data, struct wl_keyboard *kb,
         xkb_keysym_t sym = input_keysym_mods(ws->input, key, &ctrl, &shift);
         if (ctrl && shift) {
             if (sym == XKB_KEY_c || sym == XKB_KEY_C) {
-                /* Ctrl+Shift+C: copy selection */
-                return; /* selection is already in clipboard on mouse release */
+                if (ws->has_sel) sel_copy(ws);
+                return;
             }
             if (sym == XKB_KEY_v || sym == XKB_KEY_V) {
                 clipboard_paste(ws);
@@ -236,7 +237,7 @@ static void kb_key(void *data, struct wl_keyboard *kb,
     }
 
     char buf[32];
-    int n = input_key(ws->input, key, key_state, ws->term->app_cursor, buf);
+    int n = input_key(ws->input, key, key_state, ws->term->app_cursor, ws->term->app_keypad, buf);
     if (n > 0) pty_write(ws->pty, buf, n);
 
     if (key_state == WL_KEYBOARD_KEY_STATE_PRESSED && n > 0) {
@@ -704,7 +705,7 @@ void wayland_run(WaylandState *ws) {
             char buf[32];
             int n = input_key(ws->input, ws->rpt_key,
                               WL_KEYBOARD_KEY_STATE_PRESSED,
-                              ws->term->app_cursor, buf);
+                              ws->term->app_cursor, ws->term->app_keypad, buf);
             if (n > 0) {
                 pty_write(ws->pty, buf, n);
                 blink_reset(ws);

@@ -12,7 +12,7 @@ typedef struct {
     uint32_t cp;
     uint8_t  style; /* 0=normal 1=bold 2=italic 3=bold+italic */
     uint32_t slot;  /* index into atlas */
-    bool     valid;
+    uint8_t  state; /* 0=empty 1=valid 2=tombstone */
 } GlyphEntry;
 
 typedef struct {
@@ -25,6 +25,7 @@ typedef struct {
     /* atlas: ATLAS_SLOTS slots of cell_w * cell_h bytes each */
     uint8_t *atlas;
     int      atlas_used;
+    int      next_slot;  /* circular eviction cursor */
 
     /* hash table: (cp, style) → slot */
     GlyphEntry ht[ATLAS_HASH];

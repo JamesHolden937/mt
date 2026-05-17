@@ -68,6 +68,11 @@ void render_frame(uint32_t *pixels, int stride, bool *dirty,
             bool is_cursor = (cursor_on && x == t->cx && y == t->cy);
             bool selected  = cell_selected(sel, x, y, t->cols);
             uint32_t fg = c.fg, bg = c.bg;
+            if (c.attrs & ATTR_DIM) {
+                fg = (((fg>>16&0xff) + (bg>>16&0xff)) >> 1) << 16
+                   | (((fg>> 8&0xff) + (bg>> 8&0xff)) >> 1) <<  8
+                   |  ((fg    &0xff) + (bg    &0xff)) >> 1;
+            }
             if (is_cursor || selected) { uint32_t tmp = fg; fg = bg; bg = tmp; }
             /* concealed cell (SGR 8): fg==bg, cursor swap leaves both equal → invisible.
                Invert bg so the cursor block/underline/beam is always visible. */

@@ -22,7 +22,7 @@ void   input_update_mods(Input *inp,
 /* Translate a keypress to bytes to send to pty.
    Returns number of bytes written to buf (max 32). */
 int    input_key(Input *inp, uint32_t key, uint32_t state_val,
-                 bool app_cursor, char buf[32]);
+                 bool app_cursor, bool app_keypad, char buf[32]);
 
 /* Return keysym and current Ctrl/Shift state for hotkey detection. */
 xkb_keysym_t input_keysym_mods(Input *inp, uint32_t key,

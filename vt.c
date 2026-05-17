@@ -460,14 +460,14 @@ static void csi_dispatch(Term *t, char final) {
             case 0: sgr_reset:
                 t->fg = DEFAULT_FG; t->bg = DEFAULT_BG; t->attrs = 0; break;
             case 1: t->attrs |=  ATTR_BOLD;      break;
-            case 2: /* dim — ignore */             break;
+            case 2: t->attrs |=  ATTR_DIM;        break;
             case 3: t->attrs |=  ATTR_ITALIC;    break;
             case 4: t->attrs |=  ATTR_UNDERLINE;  break;
             case 5: case 6: /* blink — ignore */   break;
             case 7: t->attrs |=  ATTR_REVERSE;   break;
             case 8: t->attrs |=  ATTR_INVISIBLE; break;
             case 9: t->attrs |=  ATTR_STRIKE;    break;
-            case 22: t->attrs &= (uint16_t)~ATTR_BOLD;      break;
+            case 22: t->attrs &= (uint16_t)~(ATTR_BOLD | ATTR_DIM); break;
             case 23: t->attrs &= (uint16_t)~ATTR_ITALIC;    break;
             case 24: t->attrs &= (uint16_t)~ATTR_UNDERLINE;  break;
             case 27: t->attrs &= (uint16_t)~ATTR_REVERSE;   break;
@@ -628,7 +628,8 @@ static void esc_dispatch(Term *t, char c) {
         for (int y = 0; y < t->rows; y++) erase_line(t, y);
         term_mark_all_dirty(t);
         break;
-    case '=': case '>': /* DECKPAM/DECKPNM — keypad mode, ignore */ break;
+    case '=': t->app_keypad = true;  break; /* DECKPAM */
+    case '>': t->app_keypad = false; break; /* DECKPNM */
     default: break;
     }
 }
@@ -662,6 +663,23 @@ static int base64_decode(char *buf, int len) {
 
 static void osc_dispatch(Term *t) {
     if (t->osc_len < 2) return;
+    /* OSC 10/11: query default fg/bg color */
+    if (t->osc_len >= 4 && t->osc_buf[2] == ';' && t->osc_buf[3] == '?' && t->pty_write) {
+        uint32_t c = 0;
+        int cmd = 0;
+        if (t->osc_buf[0] == '1' && t->osc_buf[1] == '0') { c = DEFAULT_FG; cmd = 10; }
+        else if (t->osc_buf[0] == '1' && t->osc_buf[1] == '1') { c = DEFAULT_BG; cmd = 11; }
+        if (cmd) {
+            char resp[48];
+            int n = snprintf(resp, sizeof resp,
+                "\033]%d;rgb:%02x%02x/%02x%02x/%02x%02x\007", cmd,
+                (c>>16)&0xff,(c>>16)&0xff,
+                (c>> 8)&0xff,(c>> 8)&0xff,
+                 c     &0xff, c     &0xff);
+            t->pty_write(t->pty_data, resp, n);
+            return;
+        }
+    }
     /* OSC 52: set clipboard — format "52;Pc;Pd" where Pd is base64 text */
     if (t->osc_buf[0] == '5' && t->osc_buf[1] == '2' && t->set_clipboard) {
         char *semi = memchr(t->osc_buf + 2, ';', t->osc_len - 2);

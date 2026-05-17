@@ -12,6 +12,7 @@
 #define ATTR_STRIKE    (1u<<5)
 #define ATTR_WIDE      (1u<<6)  /* left half of a double-width character */
 #define ATTR_WIDE_CONT (1u<<7)  /* right-half placeholder, skip rendering */
+#define ATTR_DIM       (1u<<8)  /* faint/dim: fg blended toward bg */
 
 #define TAB_MAX 512             /* max columns tracked for tab stops */
 
@@ -58,6 +59,7 @@ struct Term {
 
     /* terminal modes */
     bool app_cursor;    /* DECCKM: arrows send ESC O x instead of ESC [ x */
+    bool app_keypad;    /* DECKPAM: numpad sends ESC O sequences */
     bool insert_mode;   /* IRM: shift right on character put */
     bool origin_mode;   /* DECOM (?6): cursor row relative to scroll region */
     uint8_t mouse_mode; /* 0=off 1=X10(1000) 2=btn(1002) 3=all(1003) */

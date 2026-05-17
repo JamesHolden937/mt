@@ -59,29 +59,44 @@ void render_frame(uint32_t *pixels, int stride, bool *dirty,
         if (!dirty[y]) continue;
         dirty[y] = false;
 
+        /* Pass 1: pre-compute effective fg/bg per cell. */
+        uint32_t efg[t->cols], ebg[t->cols];
         for (int x = 0; x < t->cols; x++) {
             Cell c = cells[y * t->cols + x];
-
-            /* right-half of a wide char: area already drawn by the left cell */
-            if (c.attrs & ATTR_WIDE_CONT) continue;
-
-            bool is_cursor = (cursor_on && x == t->cx && y == t->cy);
-            bool selected  = cell_selected(sel, x, y, t->cols);
             uint32_t fg = c.fg, bg = c.bg;
             if (c.attrs & ATTR_DIM) {
                 fg = (((fg>>16&0xff) + (bg>>16&0xff)) >> 1) << 16
                    | (((fg>> 8&0xff) + (bg>> 8&0xff)) >> 1) <<  8
                    |  ((fg    &0xff) + (bg    &0xff)) >> 1;
             }
+            bool is_cursor = (cursor_on && x == t->cx && y == t->cy);
+            bool selected  = cell_selected(sel, x, y, t->cols);
             if (is_cursor || selected) { uint32_t tmp = fg; fg = bg; bg = tmp; }
-            /* concealed cell (SGR 8): fg==bg, cursor swap leaves both equal → invisible.
-               Invert bg so the cursor block/underline/beam is always visible. */
             if (is_cursor && fg == bg) bg = (~fg) & 0x00FFFFFF;
+            efg[x] = fg; ebg[x] = bg;
+        }
 
-            /* wide chars occupy 2 cell-widths; normal chars 1 */
+        /* Pass 2: fill backgrounds scanline-by-scanline across the full row.
+           Writing cols*cw pixels sequentially per scanline is more cache-friendly
+           than per-cell fill_rect, which jumps by stride between each cell-height
+           scanline visit. */
+        for (int row = 0; row < ch; row++) {
+            uint32_t *dst = pixels + (y * ch + row) * stride;
+            for (int x = 0; x < t->cols; x++) {
+                Cell c = cells[y * t->cols + x];
+                if (c.attrs & ATTR_WIDE_CONT) continue;
+                int draw_w = (c.attrs & ATTR_WIDE) ? cw * 2 : cw;
+                uint32_t *p = dst + x * cw, col = ebg[x];
+                for (int px = 0; px < draw_w; px++) p[px] = col;
+            }
+        }
+
+        /* Pass 3: glyphs and decorations. */
+        for (int x = 0; x < t->cols; x++) {
+            Cell c = cells[y * t->cols + x];
+            if (c.attrs & ATTR_WIDE_CONT) continue;
+            uint32_t fg = efg[x];
             int draw_w = (c.attrs & ATTR_WIDE) ? cw * 2 : cw;
-
-            fill_rect(pixels, stride, x * cw, y * ch, draw_w, ch, bg);
 
             if (c.cp && c.cp != ' ') {
                 uint8_t style = (uint8_t)(c.attrs & (ATTR_BOLD | ATTR_ITALIC));
@@ -96,14 +111,13 @@ void render_frame(uint32_t *pixels, int stride, bool *dirty,
             if (c.attrs & ATTR_STRIKE)
                 draw_hline(pixels, stride, x*cw, y*ch + ch/2 - 1, draw_w, fg);
 
-            /* cursor shape overlay (drawn on top of cell content) */
+            bool is_cursor = (cursor_on && x == t->cx && y == t->cy);
             if (is_cursor) {
                 uint8_t shape = t->cursor_shape;
-                if (shape == 3 || shape == 4) /* underline */
+                if (shape == 3 || shape == 4)
                     draw_hline(pixels, stride, x*cw, y*ch + ch - 2, cw, fg);
-                else if (shape == 5 || shape == 6) /* beam */
+                else if (shape == 5 || shape == 6)
                     fill_rect(pixels, stride, x*cw, y*ch, 1, ch, fg);
-                /* block (0/1/2): the reversed fill_rect above is sufficient */
             }
         }
     }

@@ -70,6 +70,13 @@ Font *font_init(const char *path, int size_px) {
     if (f->cell_w < 1) f->cell_w = size_px / 2 + 1;
 
     f->atlas = calloc((size_t)ATLAS_SLOTS * f->cell_w * f->cell_h, 1);
+
+    /* Pre-rasterize printable ASCII in normal and bold so first output
+       has no FreeType calls on the hot path. */
+    for (uint32_t cp = 0x20; cp <= 0x7e; cp++) {
+        font_glyph(f, cp, 0);
+        font_glyph(f, cp, ATTR_BOLD);
+    }
     return f;
 }
 

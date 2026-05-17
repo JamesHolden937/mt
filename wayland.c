@@ -90,12 +90,25 @@ static void do_render(WaylandState *ws) {
         else
             { sel.x0=x0; sel.y0=y0; sel.x1=x1; sel.y1=y1; }
     }
+    /* Snapshot which rows are dirty before render_frame clears the flags. */
+    int rows = ws->term->rows;
+    bool was_dirty[256];
+    int snap = rows < 256 ? rows : 256;
+    for (int i = 0; i < snap; i++) was_dirty[i] = ws->buf_dirty[i];
+
     render_frame(ws->buf.data, ws->width, ws->buf_dirty, &sel, ws->term, ws->font);
     ws->buf.busy = true;
     ws->dirty = false;
 
     wl_surface_attach(ws->surface, ws->buf.wl_buf, 0, 0);
-    wl_surface_damage_buffer(ws->surface, 0, 0, ws->width, ws->height);
+    /* Damage only redrawn rows, coalesced into contiguous runs. */
+    int yi = 0, ch = ws->font->cell_h;
+    while (yi < snap) {
+        if (!was_dirty[yi]) { yi++; continue; }
+        int y0 = yi;
+        while (yi < snap && was_dirty[yi]) yi++;
+        wl_surface_damage_buffer(ws->surface, 0, y0 * ch, ws->width, (yi - y0) * ch);
+    }
     request_frame(ws);
 }
 

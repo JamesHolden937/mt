@@ -1,8 +1,14 @@
 # mt — minimal Wayland terminal
 
-A small, fast terminal emulator for Wayland tiling compositors (sway, river, etc.).
+A small, fast terminal emulator for Wayland **tiling** compositors (sway, river, Hyprland tiled, etc.).
 No toolkit dependencies, no scrollback, no window title management.
 CPU software rendering via `wl_shm` — no GPU requirement.
+
+mt is built for tiling compositors: it has no resize handles, no decorations of its own,
+and no UI affordances beyond the grid. On floating compositors (GNOME, KDE, weston) it
+requests `xdg_toplevel.set_maximized` on startup so the window fills the available
+area instead of opening at a tiny `DEFAULT_COLS × DEFAULT_ROWS`. Tiling compositors
+generally ignore this hint and tile the window normally.
 
 ## Goals
 

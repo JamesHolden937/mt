@@ -648,6 +648,12 @@ WaylandState *wayland_init(Term *t, Font *f, Input *inp, Pty *pty) {
     ws->xdg_toplevel = xdg_surface_get_toplevel(ws->xdg_surface);
     xdg_toplevel_add_listener(ws->xdg_toplevel, &toplevel_listener, ws);
 
+    /* Request maximized on startup. Tiling compositors (the primary target)
+       generally ignore this and tile the window; floating compositors honor
+       it, so users there get a usable full-area terminal instead of a tiny
+       one sized to DEFAULT_COLS x DEFAULT_ROWS. */
+    xdg_toplevel_set_maximized(ws->xdg_toplevel);
+
     wl_surface_commit(ws->surface);
     wl_display_roundtrip(ws->display);
 

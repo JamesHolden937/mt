@@ -41,6 +41,7 @@ int main(int argc, char *argv[]) {
     char *const *cmd_argv = (i < argc) ? (char *const *)&argv[i] : NULL;
 
     signal(SIGCHLD, sigchld);
+    signal(SIGPIPE, SIG_IGN);
 
     Font  *font  = font_init(font_path, font_size);
     Term  *term  = term_new(cols, rows);

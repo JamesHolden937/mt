@@ -9,10 +9,15 @@ SRCS    = main.c wayland.c input.c pty.c vt.c render.c font.c \
 OBJS    = $(SRCS:.c=.o)
 BIN     = mt
 
+PREFIX  ?= /usr/local
+BINDIR  ?= $(PREFIX)/bin
+DATADIR ?= $(PREFIX)/share
+APPDIR   = $(DATADIR)/applications
+
 PROTO_DIR = $(shell pkg-config --variable=pkgdatadir wayland-protocols)
 XDG_XML   = $(PROTO_DIR)/stable/xdg-shell/xdg-shell.xml
 
-.PHONY: all clean run
+.PHONY: all clean run install uninstall
 all: $(BIN)
 
 $(BIN): $(OBJS)
@@ -34,3 +39,13 @@ clean:
 
 run: $(BIN)
 	./$(BIN)
+
+install: $(BIN)
+	install -Dm755 $(BIN) $(DESTDIR)$(BINDIR)/$(BIN)
+	install -Dm644 mt.desktop $(DESTDIR)$(APPDIR)/mt.desktop
+	-update-desktop-database $(DESTDIR)$(APPDIR) 2>/dev/null
+
+uninstall:
+	rm -f $(DESTDIR)$(BINDIR)/$(BIN)
+	rm -f $(DESTDIR)$(APPDIR)/mt.desktop
+	-update-desktop-database $(DESTDIR)$(APPDIR) 2>/dev/null

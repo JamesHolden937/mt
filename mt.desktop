@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=mt
+Comment=Minimal Wayland terminal emulator
+Exec=mt
+Icon=utilities-terminal
+Type=Application
+Categories=System;TerminalEmulator;
+Keywords=terminal;console;command;
+Terminal=false
